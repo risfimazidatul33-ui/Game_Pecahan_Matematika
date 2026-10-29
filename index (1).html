@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kucing Lapar Pizza - Belajar Pecahan</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Comic Sans MS","Trebuchet MS",system-ui,sans-serif;background:#ffe9c7;transition:background .4s;color:#4a2c0a}
+  body.l1{background:#ffe9c7}body.l2{background:#d8efff}body.l3{background:#e4f7d8}body.l4{background:#f3e1ff}body.l5{background:#fff3b0}
+  #app{max-width:780px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding:12px}
+  header{display:flex;justify-content:space-between;align-items:center;font-size:22px;font-weight:bold}
+  header button{font-size:26px;border:0;background:#fff8;border-radius:12px;padding:6px 12px;cursor:pointer}
+  #stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;padding:10px}
+  h1{margin:0;font-size:clamp(30px,7vw,52px);color:#c0392b}
+  h2{margin:0;font-size:clamp(20px,4vw,28px)}
+  .btn{font:inherit;font-size:clamp(22px,5vw,32px);font-weight:bold;color:#fff;border:4px solid #fff;border-radius:22px;padding:14px 38px;cursor:pointer;background:#2ecc71;box-shadow:0 5px 0 #0003}
+  .btn:active{transform:translateY(3px);box-shadow:0 2px 0 #0003}
+  .btn.red{background:#e74c3c}.btn.org{background:#e67e22}
+  .row{display:flex;gap:24px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .pz{width:min(260px,60vw)}
+  .fr{font-size:clamp(40px,10vw,64px);line-height:1.2}
+  .choices{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+  .ch{width:min(190px,28vw);aspect-ratio:1;background:#fff;border:5px solid #fff;border-radius:22px;padding:8px;cursor:pointer;box-shadow:0 5px 0 #0003}
+  .ch:active{transform:translateY(3px)}
+  .ch.no{animation:sh .4s}
+  @keyframes sh{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+  .sl{cursor:pointer}.sl:hover path{fill:#ffe27a}
+  .plate{width:min(130px,30vw)}
+  footer{display:flex;align-items:center;gap:12px;padding-top:8px}
+  #cat{font-size:64px;line-height:1}
+  #bubble{flex:1;background:#fff;border-radius:20px;padding:14px 18px;font-size:clamp(18px,3.6vw,24px);min-height:64px;display:flex;align-items:center;box-shadow:0 3px 0 #0002}
+  .stars{font-size:clamp(44px,10vw,72px)}
+</style>
+</head>
+<body class="l1">
+<div id="app">
+  <header><span id="lvl"></span><span id="skor"></span><button id="snd" title="Suara">🔊</button></header>
+  <main id="stage"></main>
+  <footer><div id="cat">🐱</div><div id="bubble"></div></footer>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const CHEESE = '#f7d154', CRUST = '#c8841c';
+
+// ----- Soal: [bentuk, [[potongan, arah, benar?] x3 posisi]] -----
+const Q = [
+  ['pizza', [['uhalf','v',0],['half','v',1],['quarter','v',0]]],
+  ['roti',  [['quarter','v',0],['uhalf','h',0],['half','h',1]]],
+  ['apel',  [['half','v',1],['uquarter','v',0],['uhalf','h',0]]],
+  ['roti',  [['half','v',0],['uquarter','v',0],['quarter','v',1]]],
+  ['pizza', [['half','h',1],['quarter','v',0],['uhalf','v',0]]],
+  ['apel',  [['quarter','v',1],['half','v',0],['uquarter','h',0]]]
+];
+const TARGET = ['½','½','½','¼','½','¼'];
+const WORD = {'½':'setengah','¼':'seperempat'};
+const FRIENDS = ['🐶','🐰','🐹','🦊'];
+
+let s = {level:0, soal:0, skor:0, cut:0, taken:-1, mute:false, lock:false}, tm;
+
+// ----- Suara -----
+let ac;
+function beep(freqs, dur){
+  try{
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    let t = ac.currentTime;
+    freqs.forEach(f => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.frequency.value = f; o.connect(g); g.connect(ac.destination);
+      g.gain.setValueAtTime(.25, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+      o.start(t); o.stop(t + dur); t += dur * .8;
+    });
+  }catch(e){}
+}
+const ting = () => beep([880,1320], .2), uuh = () => beep([300,200], .3);
+
+function say(t){
+  $('bubble').textContent = t;
+  if(s.mute || !('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(t.replace(/½/g,'setengah').replace(/¼/g,'seperempat'));
+  u.lang = 'id-ID'; u.rate = .9;
+  speechSynthesis.speak(u);
+}
+$('snd').onclick = () => {
+  s.mute = !s.mute; $('snd').textContent = s.mute ? '🔇' : '🔊';
+  if(s.mute && 'speechSynthesis' in window) speechSynthesis.cancel();
+};
+
+// ----- Gambar -----
+function pizza(cut, taken){
+  const pep = [[112,50],[110,110],[48,112],[50,48]];
+  let b = '';
+  if(cut < 2){
+    b = `<circle cx="80" cy="80" r="78" fill="#d9923b"/><circle cx="80" cy="80" r="68" fill="${CHEESE}"/>` +
+        pep.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="10" fill="#c0392b"/>`).join('');
+    if(cut === 1) b += '<line x1="80" y1="3" x2="80" y2="157" stroke="#5a3510" stroke-width="4" stroke-linecap="round"/>';
+  } else {
+    const d = ['M80,80 L80,2 A78,78 0 0 1 158,80 Z','M80,80 L158,80 A78,78 0 0 1 80,158 Z',
+               'M80,80 L80,158 A78,78 0 0 1 2,80 Z','M80,80 L2,80 A78,78 0 0 1 80,2 Z'];
+    d.forEach((p, i) => {
+      if(i === taken) return;
+      b += `<g class="sl" data-i="${i}"><path d="${p}" fill="${CHEESE}" stroke="${CRUST}" stroke-width="4" stroke-linejoin="round"/>` +
+           `<circle cx="${pep[i][0]}" cy="${pep[i][1]}" r="10" fill="#c0392b"/></g>`;
+    });
+  }
+  return `<svg viewBox="0 0 160 160" width="100%">${b}</svg>`;
+}
+
+function choice(shape, cut, o){
+  const r = 54, f = {pizza:[CHEESE,CRUST], roti:['#e8b36a','#a86a2a'], apel:['#e84a4a','#9c2222']}[shape];
+  const v = d => shape === 'roti' ? [60+d,10,60+d,110] : (h => [60+d,60-h,60+d,60+h])(Math.sqrt(r*r-d*d));
+  const z = d => shape === 'roti' ? [10,60+d,110,60+d] : (h => [60-h,60+d,60+h,60+d])(Math.sqrt(r*r-d*d));
+  const [m, x] = o === 'v' ? [v, z] : [z, v];
+  const L = cut === 'half' ? [m(0)] : cut === 'uhalf' ? [m(-22)] : cut === 'quarter' ? [m(0), x(0)] : [m(0), x(24)];
+  const base = shape === 'roti'
+    ? `<rect x="10" y="10" width="100" height="100" rx="10" fill="${f[0]}" stroke="${f[1]}" stroke-width="5"/>`
+    : `<circle cx="60" cy="60" r="54" fill="${f[0]}" stroke="${f[1]}" stroke-width="5"/>`;
+  return `<svg viewBox="0 0 120 120" width="100%">${base}` +
+    L.map(a => `<line x1="${a[0]}" y1="${a[1]}" x2="${a[2]}" y2="${a[3]}" stroke="#4a2c0a" stroke-width="4" stroke-linecap="round"/>`).join('') + '</svg>';
+}
+
+const plateSvg = got => `<svg viewBox="0 0 100 100" width="100%"><circle cx="50" cy="50" r="46" fill="#fff" stroke="#999" stroke-width="4"/>` +
+  (got ? `<path d="M30,68 L30,26 A42,42 0 0 1 72,68 Z" fill="${CHEESE}" stroke="${CRUST}" stroke-width="3" stroke-linejoin="round"/>` : '') + '</svg>';
+
+// ----- Alur -----
+function go(l){
+  clearTimeout(tm); s.level = l; s.lock = false; render();
+}
+function hud(){
+  const names = ['', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Selesai'];
+  $('lvl').textContent = names[s.level] || '';
+  $('skor').textContent = '⭐ ' + s.skor;
+  document.body.className = 'l' + (s.level || 1);
+}
+function render(){
+  hud();
+  const st = $('stage');
+  if(s.level === 0){
+    s.skor = 0; s.soal = 0; s.cut = 0; s.taken = -1; hud();
+    st.innerHTML = '<h1>KUCING LAPAR PIZZA</h1><h2>Belajar Pecahan Yuk!</h2><div style="font-size:90px">🍕</div><button class="btn" id="go">▶ MULAI</button>';
+    $('go').onclick = () => go(1);
+    say('Halo! Aku lapar. Bantu aku membagi pizza ya!');
+  }
+  else if(s.level === 1){
+    s.cut = 0;
+    st.innerHTML = '<h2>Bagi pizza jadi 2 sama besar</h2><div class="row"><div class="pz" id="pz">' + pizza(0) +
+      '</div><div class="fr">🐶<br>🐰</div></div><button class="btn red" id="cut">✂️ POTONG</button>';
+    say('Bagi pizza jadi 2 sama besar untuk 2 teman! Klik POTONG.');
+    $('cut').onclick = () => {
+      $('pz').innerHTML = pizza(1); $('cut').remove(); ting(); s.skor++; hud();
+      say('Setengah = ½. Sama besar!');
+      tm = setTimeout(() => { s.soal = 0; go(2); }, 3500);
+    };
+  }
+  else if(s.level === 2 || s.level === 4) question();
+  else if(s.level === 3){
+    s.cut = 0; s.taken = -1;
+    const draw = () => {
+      st.innerHTML = '<h2>Ada 4 teman! Potong jadi 4 sama besar</h2><div class="row fr">' + FRIENDS.join(' ') +
+        '</div><div class="row"><div class="pz" id="pz">' + pizza(s.cut, s.taken) + '</div><div class="plate">' +
+        plateSvg(s.taken >= 0) + '</div></div>' + (s.cut < 2 ? '<button class="btn red" id="cut">✂️ POTONG</button>' : '');
+      if(s.cut === 2 && s.taken < 0)
+        document.querySelectorAll('.sl').forEach(g => g.onclick = () => {
+          s.taken = +g.dataset.i; ting(); s.skor++; hud(); draw();
+          say('Hebat! Itu ¼ pizza!');
+          tm = setTimeout(() => { s.soal = 0; go(4); }, 2800);
+        });
+      if($('cut')) $('cut').onclick = () => {
+        s.cut++; ting(); draw();
+        if(s.cut === 1) say('Bagus! Klik POTONG sekali lagi.');
+        else say('Seperempat = ¼. Ambil ¼ pizza! Klik satu potongan.');
+      };
+    };
+    draw();
+    say('Ada 4 teman! Klik POTONG 2 kali jadi 4 bagian sama besar.');
+  }
+  else if(s.level === 5){
+    st.innerHTML = '<div class="stars">⭐⭐⭐</div><h1>HEBAT!</h1><h2>Kamu pintar pecahan!</h2><h2>Skor kamu: ' + s.skor +
+      ' dari 8</h2><button class="btn org" id="again">🔁 MAIN LAGI</button>';
+    $('again').onclick = () => go(0);
+    say('Hebat! Skor kamu: ' + s.skor + ' dari 8');
+  }
+}
+
+function question(){
+  const qi = (s.level === 2 ? 0 : 3) + s.soal, [shape, opts] = Q[qi], t = TARGET[qi];
+  $('stage').innerHTML = `<h2>Mana yang ${WORD[t]} (${t})?</h2><div class="choices">` +
+    opts.map((o, i) => `<button class="ch" data-i="${i}">${choice(shape, o[0], o[1])}</button>`).join('') + '</div>';
+  say(`Mana yang ${WORD[t]} (${t})? Klik gambarnya!`);
+  document.querySelectorAll('.ch').forEach(b => b.onclick = () => {
+    if(s.lock) return;
+    if(opts[+b.dataset.i][2]){
+      s.lock = true; ting(); s.skor++; hud(); say('Hebat!');
+      tm = setTimeout(() => {
+        s.soal++;
+        if(s.soal > 2) go(s.level === 2 ? 3 : 5); else { s.lock = false; question(); }
+      }, 1300);
+    } else {
+      uuh(); b.classList.remove('no'); void b.offsetWidth; b.classList.add('no');
+      say('Coba lagi ya! Harus sama besar.');
+    }
+  });
+}
+
+go(0);
+</script>
+</body>
+</html>
